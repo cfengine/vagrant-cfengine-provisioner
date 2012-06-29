@@ -159,7 +159,10 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
   end
 
   def add_yum_repo
-    env[:vm].channel.sudo("mkdir -p #{File.dirname(config.cfengine_yum_repo_file)} && (echo '[cfengine-repository]'; echo 'baseurl=#{config.cfengine_yum_repo_url}'; echo 'enabled=1'; echo 'gpgcheck=1') > #{config.cfengine_yum_repo_file}")
+    env[:vm].ui.info("Adding the CFEngine repository to #{config.cfengine_yum_repo_file}")
+    env[:vm].channel.sudo("mkdir -p #{File.dirname(config.cfengine_yum_repo_file)} && (echo '[cfengine-repository]'; echo 'name=CFEngine Community Yum Repository'; echo 'baseurl=#{config.cfengine_yum_repo_url}'; echo 'enabled=1'; echo 'gpgcheck=1') > #{config.cfengine_yum_repo_file}")
+    env[:vm].ui.info("Installing CFEngine Community Yum Repository GPG KEY from #{config.cfengine_repo_gpg_key_url}")
+    env[:vm].channel.sudo("GPGFILE=$(mktemp) && wget -O $GPGFILE #{config.cfengine_repo_gpg_key_url} && rpm --import $GPGFILE; rm -f $GPGFILE")
   end
 
   def get_vm_packager
@@ -188,7 +191,7 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     if @__distro == :apt
       env[:vm].channel.sudo("apt-get update && apt-get install cfengine-community");
     elsif @__distro == :yum
-      env[:vm].channel.sudo("yum install cfengine-community")
+      env[:vm].channel.sudo("yum -y install cfengine-community")
     else
       env[:vm].ui.error("Don't know how to install the CFEngine package in this distribution")
       raise CFEngineError, :unsupported_cfengine_package_distro
