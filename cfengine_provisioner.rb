@@ -252,6 +252,13 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     end
     if status == 0
       env[:vm].ui.info("#{name} bootstrapped successfully.")
+      if config.am_policy_hub
+        # The policy hub might need to execute some policy before agents
+        # will be able to bootstrap against it (adjust fw policy).
+        # It might not happen on it's own before the first client comes
+        # up. This will only help if the hub is the first provisioned node.
+        env[:vm].channel.sudo("/var/cfengine/bin/cf-agent --no-lock")
+      end
     else
       env[:vm].ui.error("Error bootstrapping #{name}.")
       raise CFEngineError, :bootstrap_error
