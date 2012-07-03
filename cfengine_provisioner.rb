@@ -28,7 +28,7 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     # Generate the accessors 
     CFEngineConfigDefaults.keys.each do |param|
       eval "attr_accessor :#{param}"
-      eval "def #{param}; @#{param} || #{CFEngineConfigDefaults[param].inspect}; end"
+      eval "def #{param}; @#{param}.nil? ? #{CFEngineConfigDefaults[param].inspect} : @#{param}; end"
     end
 
     def validate(env, errors)
