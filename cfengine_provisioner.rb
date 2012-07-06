@@ -15,14 +15,15 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
       'am_policy_hub' => true,
       'policy_server' => nil,
       'bootstrap' => true,
-      'cfengine_tarfile_url' => nil,
-      'cfengine_tarfile_tmpfile' =>  '/tmp/vagrant-cfengine-tarfile.tar.gz',
-      'cfengine_files_path' => nil,
-      'cfengine_debian_repo_file' => '/etc/apt/sources.list.d/cfengine-community.list',
-      'cfengine_debian_repo_line' => 'deb http://cfengine.com/pub/apt $(lsb_release -cs) main',
-      'cfengine_yum_repo_file' =>    '/etc/yum.repos.d/cfengine-community.repo',
-      'cfengine_yum_repo_url' =>     'http://cfengine.com/pub/yum/',
-      'cfengine_repo_gpg_key_url' => 'http://cfengine.com/pub/gpg.key',
+      'tarfile_url' => nil,
+      'tarfile_tmpfile' =>  '/tmp/vagrant-cfengine-tarfile.tar.gz',
+      'tarfile_path' => nil,
+      'files_path' => nil,
+      'debian_repo_file' => '/etc/apt/sources.list.d/cfengine-community.list',
+      'debian_repo_line' => 'deb http://cfengine.com/pub/apt $(lsb_release -cs) main',
+      'yum_repo_file' =>    '/etc/yum.repos.d/cfengine-community.repo',
+      'yum_repo_url' =>     'http://cfengine.com/pub/yum/',
+      'repo_gpg_key_url' => 'http://cfengine.com/pub/gpg.key',
     }      
 
     # Generate the accessors 
@@ -34,8 +35,8 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     def validate(env, errors)
       super
 
-      errors.add("Invalid cfengine_files_path parameter, must be an existing directory") unless !cfengine_files_path || File.directory?(cfengine_files_path)
-      errors.add("Only one of cfengine_tarfile_url or cfengine_files_path must be specified") if cfengine_tarfile_url && cfengine_files_path
+      errors.add("Invalid files_path parameter, must be an existing directory") unless !files_path || File.directory?(files_path)
+      errors.add("Only one of tarfile_url or files_path must be specified") if tarfile_url && files_path
 
       # URL validation happens in prepare.
     end
@@ -126,11 +127,11 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     end
 
     # Install /var/cfengine files if necessary
-    if config.cfengine_tarfile_url
-      install_tarfile(config.cfengine_tarfile_tmpfile)
+    if config.tarfile_url
+      install_tarfile(config.tarfile_tmpfile)
     end
-    if config.cfengine_files_path
-      install_files(config.cfengine_files_path)
+    if config.files_path
+      install_files(config.files_path)
     end
     if config.bootstrap
       if !verify_bootstrap || config.bootstrap == :force
@@ -155,16 +156,16 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
   end
 
   def add_deb_repo
-    env[:vm].ui.info("Adding the CFEngine repository to #{config.cfengine_debian_repo_file}")
-    env[:vm].channel.sudo("mkdir -p #{File.dirname(config.cfengine_debian_repo_file)} && /bin/echo #{config.cfengine_debian_repo_line} > #{config.cfengine_debian_repo_file}")
-    env[:vm].channel.sudo("GPGFILE=`tempfile`; wget -O $GPGFILE #{config.cfengine_repo_gpg_key_url} && apt-key add $GPGFILE; rm -f $GPGFILE")
+    env[:vm].ui.info("Adding the CFEngine repository to #{config.debian_repo_file}")
+    env[:vm].channel.sudo("mkdir -p #{File.dirname(config.debian_repo_file)} && /bin/echo #{config.debian_repo_line} > #{config.debian_repo_file}")
+    env[:vm].channel.sudo("GPGFILE=`tempfile`; wget -O $GPGFILE #{config.repo_gpg_key_url} && apt-key add $GPGFILE; rm -f $GPGFILE")
   end
 
   def add_yum_repo
-    env[:vm].ui.info("Adding the CFEngine repository to #{config.cfengine_yum_repo_file}")
-    env[:vm].channel.sudo("mkdir -p #{File.dirname(config.cfengine_yum_repo_file)} && (echo '[cfengine-repository]'; echo 'name=CFEngine Community Yum Repository'; echo 'baseurl=#{config.cfengine_yum_repo_url}'; echo 'enabled=1'; echo 'gpgcheck=1') > #{config.cfengine_yum_repo_file}")
-    env[:vm].ui.info("Installing CFEngine Community Yum Repository GPG KEY from #{config.cfengine_repo_gpg_key_url}")
-    env[:vm].channel.sudo("GPGFILE=$(mktemp) && wget -O $GPGFILE #{config.cfengine_repo_gpg_key_url} && rpm --import $GPGFILE; rm -f $GPGFILE")
+    env[:vm].ui.info("Adding the CFEngine repository to #{config.yum_repo_file}")
+    env[:vm].channel.sudo("mkdir -p #{File.dirname(config.yum_repo_file)} && (echo '[cfengine-repository]'; echo 'name=CFEngine Community Yum Repository'; echo 'baseurl=#{config.yum_repo_url}'; echo 'enabled=1'; echo 'gpgcheck=1') > #{config.yum_repo_file}")
+    env[:vm].ui.info("Installing CFEngine Community Yum Repository GPG KEY from #{config.repo_gpg_key_url}")
+    env[:vm].channel.sudo("GPGFILE=$(mktemp) && wget -O $GPGFILE #{config.repo_gpg_key_url} && rpm --import $GPGFILE; rm -f $GPGFILE")
   end
 
   def get_vm_packager
