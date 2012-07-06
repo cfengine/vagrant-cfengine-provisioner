@@ -36,7 +36,8 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
       super
 
       errors.add("Invalid files_path parameter, must be an existing directory") unless !files_path || File.directory?(files_path)
-      errors.add("Only one of tarfile_url or files_path must be specified") if tarfile_url && files_path
+      errors.add("Invalid tarfile_path parameter, must be an existing file") unless !tarfile_path || File.exists?(tarfile_path)
+      errors.add("Only one of tarfile_url, tarfile_path or files_path must be specified") if (tarfile_url && files_path) || (tarfile_url && tarfile_path) || (tarfile_path && files_path)
 
       # URL validation happens in prepare.
     end
