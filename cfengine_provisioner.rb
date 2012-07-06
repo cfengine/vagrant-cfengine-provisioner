@@ -152,7 +152,7 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     # This only checks that the host has at some point been bootstrapped, it does not check
     # the state of the connection to the hub, the running daemons, or anything else.
     env[:vm].ui.info("Checking if CFEngine has already been bootstrapped.")
-    return env[:vm].channel.test("test -f /var/cfengine/policy_host.dat", :sudo => true)
+    return env[:vm].channel.test("test -f /var/cfengine/policy_server.dat", :sudo => true)
   end
 
   def add_deb_repo
