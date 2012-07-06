@@ -95,9 +95,11 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
   def prepare
     # We download the tarfile, if necessary, during prepare, so during provision!
     # we can just copy it to the VM.
-    if config.cfengine_tarfile_url
-      @downloader = CFDownloader.new(@env, config.cfengine_tarfile_url)
-      @downloader.download_to(File.open(config.cfengine_tarfile_tmpfile, "w"))
+    if config.tarfile_url
+      @downloader = CFDownloader.new(@env, config.tarfile_url)
+      f = File.open(config.tarfile_tmpfile, "w")
+      @downloader.download_to(f)
+      f.close
     end
   end
 
