@@ -16,7 +16,7 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
       'policy_server' => nil,
       'bootstrap' => true,
       'tarfile_url' => nil,
-      'tarfile_tmpfile' =>  '/tmp/vagrant-cfengine-tarfile.tar.gz',
+      'tarfile_tmpfile' =>  'downloaded-vagrant-cfengine-tarfile.tar.gz',
       'tarfile_path' => nil,
       'files_path' => nil,
       'debian_repo_file' => '/etc/apt/sources.list.d/cfengine-community.list',
@@ -38,6 +38,9 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
       errors.add("Invalid files_path parameter, must be an existing directory") unless !files_path || File.directory?(files_path)
       errors.add("Invalid tarfile_path parameter, must be an existing file") unless !tarfile_path || File.exists?(tarfile_path)
       errors.add("Only one of tarfile_url, tarfile_path or files_path must be specified") if (tarfile_url && files_path) || (tarfile_url && tarfile_path) || (tarfile_path && files_path)
+      errors.add("tarfile_tmpfile must be a relative path inside the current directory") unless !tarfile_tmpfile || (Pathname.new(tarfile_tmpfile).relative? && tarfile_tmpfile !~ /\.\.\//)
+      errors.add("tarfile_path must be a relative path inside the current directory") unless !tarfile_path || (Pathname.new(tarfile_path).relative? && tarfile_path !~ /\.\.\//)
+      errors.add("files_path must be a relative path inside the current directory") unless !files_path || (Pathname.new(files_path).relative? && files_path !~ /\.\.\//)
 
       # URL validation happens in prepare.
     end
@@ -130,8 +133,10 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     # Install /var/cfengine files if necessary
     if config.tarfile_url
       install_tarfile(config.tarfile_tmpfile)
-    end
-    if config.files_path
+      File.unlink(config.tarfile_tmpfile)
+    elsif config.tarfile_path
+      install_tarfile(config.tarfile_path)
+    elsif config.files_path
       install_files(config.files_path)
     end
     if config.bootstrap
@@ -202,32 +207,26 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     end
   end
 
+  # tarfile is assumed to be a relative path within the current directory
   def install_tarfile(tarfile)
     unless File.exists?(tarfile)
-      env[:vm].ui.error("The tarfile #{tarfile} disappeared, cannot install on VM.")
+      env[:vm].ui.error("The tarfile #{tarfile} does not exist, cannot install on VM.")
       raise CFEngineError, :tarfile_disappeared
     end
-    # For now use the same file in the VM
-    env[:vm].ui.info("Copying #{tarfile} to VM")
-    env[:vm].channel.upload(tarfile, tarfile)
     # Then untar it on the VM
-    env[:vm].ui.info("Unpacking tarfile on VM")
-    env[:vm].channel.sudo("cd /var/cfengine && tar zxvf #{tarfile}")
+    env[:vm].ui.info("Unpacking tarfile on VM from /vagrant/#{tarfile}")
+    env[:vm].channel.sudo("cd /var/cfengine && tar zxvf '/vagrant/#{tarfile}'")
   end
 
+  # dirpath is assumed to be a relative path within the current directory
   def install_files(dirpath)
     # Copy the contents of dirpath to /var/cfengine on the VM
     unless File.directory?(dirpath)
       env[:vm].ui.error("The path #{dirpath} must exist and be a directory")
       raise CFEngineError, :invalid_files_directory
     end
-    env[:vm].ui.error("The cfengine_files_path option is not yet functional")
-    # TODO: not working because scp_connect is protected. best solution
-    # would be to add an "options" argument to channel.upload so that
-    # we can specify options like :recursive
-    #env[:vm].channel.scp_connect do |scp|
-    #  scp.upload!(dirpath, '/var/cfengine', :recursive => true)
-    #end
+    env[:vm].ui.info("Copying files from /vagrant/#{dirpath} to /var/cfengine on VM")
+    env[:vm].channel.sudo("cp -a '/vagrant/#{dirpath}/'* /var/cfengine")
   end
 
   def bootstrap_cfengine
