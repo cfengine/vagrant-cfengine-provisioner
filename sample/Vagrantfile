@@ -11,10 +11,24 @@ Vagrant::Config.run do |config|
   config.vm.define :cfhub do |hub_config|
     # Every Vagrant virtual environment requires a box to build off of.
     hub_config.vm.box = "lucid32"
+#    hub_config.vm.box = "CentOS-6.2-x86_64-minimal-without-cfengine"
 
     # Use the CFEngine provisioner
     hub_config.vm.provision CFEngineProvisioner do |cf3|
-      # Commented-out configuration values indicate the defaults.
+
+      # Mode of operation for the provisioner.
+      # If mode == :bootstrap (default), then CFEngine will be
+      # bootstrapped in this machine if it's not bootstrapped already.
+      # (if in addition force_bootstrap is "true", then it will be
+      # always bootstrapped).
+      # If mode == : singlerun, then cf-agent will be run only
+      # once after the VM boots, and it will be used to execute
+      # the CFEngine policy file named in runfile_path.
+      # cf3.mode = :bootstrap
+
+      # Whether to force bootstrap even if CFEngine has already been
+      # bootstrapped.
+      # cf3.force_bootstrap = false
 
       # Attempt to install CFEngine if not installed yet. Depends on the
       # binary package repositories from http://cfengine.com/pub/
@@ -35,36 +49,38 @@ Vagrant::Config.run do |config|
       # to set it manually to the address in a host-only network
       # which needs to be configured using the config.vm.network
       # parameter, as shown below.
-      cf3.policy_server = "10.1.1.10"
-      
-      # Should CFEngine be bootstrapped in this machine if it's not
-      # bootstrapped already?
-      # Any "true" value will be interpreted as "yes".
-      # If this parameter is set to :force, CFEngine
-      # will be re-bootstrapped even if it's already been done
-      # before.
-      # cf3.bootstrap = true
-
+      # cf3.policy_server = "10.1.1.10"
+    
       # URL of a .tar.gz file that gets unpacked under /var/cfengine/
       # after installation but before bootstrap. This file should
       # contain the contents of /var/cfengine exactly as desired,
       # so it should contain the appropriate directories, for example
       # masterfiles/foo.cf, inputs/bar.cf, ppkeys/, etc.
-      #cf3.cfengine_tarfile_url = 'http://localhost/cfengine_files.tar.gz'
+      # cf3.tarfile_url = 'http://localhost/cfengine_files.tar.gz'
 
-      # Path of a local directory to copy over to /var/cfengine/
-      # on the VM. Same effect as cfengine_tarfile_url. Only one
-      # of cfengine_tarfile_url or cfengine_files can be specified
-      # This is not implemented yet.
-      #cf3.cfengine_files_path = './cfengine_files'
+      # Filename of a .tar.gz file that gets unpacked under /var/cfengine/
+      # The effect is the same as with cfengine_tarfile_url, but this
+      # is expected to be a path relative to the current directory (where
+      # the Vagrantfile is stored).
+      # cf3.tarfile_path = 'cfengine_files.tar.gz'
+
+      # Directory to copy to /var/cfengine. Must be relative to current
+      # directory. E.g. if its value is 'cfengine_files', the contents
+      # of /vagrant/cfengine_files/ will be copied to /var/cfengine
+      # on the VM.
+      # cf3.files_path = 'cf_files'
+
+      # File to execute when mode == :singlerun
+      # Must be a relative path inside the current directory.
+      # cf3.runfile_path = 'masterfiles/test2.cf'
 
       # Normally this shouldn't be modified, except for testing or
       # for internal repositories
-      # cf3.cfengine_debian_repo_line = 'deb http://cfengine.com/pub/apt $(lsb_release -cs) main'
+      # cf3.debian_repo_line = 'deb http://cfengine.com/pub/apt $(lsb_release -cs) main'
 
       # Normally this shouldn't be modified, except for testing or
       # for internal repositories
-      #cf3.cfengine_yum_repo_url = 'http://cfengine.com/pub/yum/'
+      # cf3.yum_repo_url = 'http://cfengine.com/pub/yum/'
     end
 
     # For debugging
@@ -74,6 +90,21 @@ Vagrant::Config.run do |config|
     # ssh warnings.
     hub_config.vm.network :hostonly, "10.1.1.10"
   end
+
+ #   config.vm.define :cfclient do |client_config|
+ #     # Every Vagrant virtual environment requires a box to build off of.
+ #     client_config.vm.box = "lucid32"
+
+ #     client_config.vm.provision CFEngineProvisioner do |cf3|
+ #       cf3.install_cfengine = true    # install CFEngine if not installed yet
+ #       cf3.am_policy_hub = false  # whether to configure as a policy hub
+ #       cf3.policy_server = "10.1.1.10"   # address of the policy server to use for bootstrapping
+ # #      cf3.bootstrap = true      # whether to bootstrap CFEngine
+ #       #    cf3.tarfile = nil         # if given, gets untarred under /var/cfengine/ after installation but before bootstrap
+ #     end
+
+ #     client_config.vm.network :hostonly, "10.1.1.11"
+ #   end
 
   # Enable and configure the chef solo provisioner
   # config.vm.provision :chef_solo do |chef|
