@@ -9,16 +9,22 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
   ######################################################################
 
   class Config < Vagrant::Config::Base
+    # Valid values for the mode parameter
+    CFEngineValidModes = [ :bootstrap, :singlerun ]
+
     # Default config values
     CFEngineConfigDefaults = {
+      'mode' => :bootstrap,
+      'force_bootstrap' => false,
       'install_cfengine' => true,
       'am_policy_hub' => true,
       'policy_server' => nil,
-      'bootstrap' => true,
       'tarfile_url' => nil,
       'tarfile_tmpfile' =>  'downloaded-vagrant-cfengine-tarfile.tar.gz',
       'tarfile_path' => nil,
       'files_path' => nil,
+      'runfile_path' => nil,
+      # Internal parameters, normally should not be modified
       'debian_repo_file' => '/etc/apt/sources.list.d/cfengine-community.list',
       'debian_repo_line' => 'deb http://cfengine.com/pub/apt $(lsb_release -cs) main',
       'yum_repo_file' =>    '/etc/yum.repos.d/cfengine-community.repo',
@@ -35,12 +41,22 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     def validate(env, errors)
       super
 
-      errors.add("Invalid files_path parameter, must be an existing directory") unless !files_path || File.directory?(files_path)
-      errors.add("Invalid tarfile_path parameter, must be an existing file") unless !tarfile_path || File.exists?(tarfile_path)
-      errors.add("Only one of tarfile_url, tarfile_path or files_path must be specified") if (tarfile_url && files_path) || (tarfile_url && tarfile_path) || (tarfile_path && files_path)
-      errors.add("tarfile_tmpfile must be a relative path inside the current directory") unless !tarfile_tmpfile || (Pathname.new(tarfile_tmpfile).relative? && tarfile_tmpfile !~ /\.\.\//)
-      errors.add("tarfile_path must be a relative path inside the current directory") unless !tarfile_path || (Pathname.new(tarfile_path).relative? && tarfile_path !~ /\.\.\//)
-      errors.add("files_path must be a relative path inside the current directory") unless !files_path || (Pathname.new(files_path).relative? && files_path !~ /\.\.\//)
+      errors.add("Invalid mode parameter, must be one of #{CFEngineValidModes.inspect}") unless CFEngineValidModes.include?(mode)
+      if mode == :singlerun
+        errors.add("When mode == :singlerun, you must specify the runfile_path parameter") if !runfile_path
+        errors.add("Parameters files_path, tarfile_path and tarfile_url are invalid when mode == :singlerun") if files_path || tarfile_path || tarfile_url
+        errors.add("Invalid runfile_path parameter, must be an existing file") unless !runfile_path || File.exists?(runfile_path)
+        errors.add("runfile_path must be a relative path inside the current directory") unless !runfile_path || (Pathname.new(runfile_path).relative? && runfile_path !~ /\.\.\//)
+      end
+      if mode == :bootstrap
+        errors.add("When mode == :bootstrap, you cannot specify the runfile_path parameter") if runfile_path
+        errors.add("Invalid files_path parameter, must be an existing directory") unless !files_path || File.directory?(files_path)
+        errors.add("Invalid tarfile_path parameter, must be an existing file") unless !tarfile_path || File.exists?(tarfile_path)
+        errors.add("Only one of tarfile_url, tarfile_path or files_path must be specified") if (tarfile_url && files_path) || (tarfile_url && tarfile_path) || (tarfile_path && files_path)
+        errors.add("tarfile_tmpfile must be a relative path inside the current directory") unless !tarfile_tmpfile || (Pathname.new(tarfile_tmpfile).relative? && tarfile_tmpfile !~ /\.\.\//)
+        errors.add("tarfile_path must be a relative path inside the current directory") unless !tarfile_path || (Pathname.new(tarfile_path).relative? && tarfile_path !~ /\.\.\//)
+        errors.add("files_path must be a relative path inside the current directory") unless !files_path || (Pathname.new(files_path).relative? && files_path !~ /\.\.\//)
+      end
 
       # URL validation happens in prepare.
     end
@@ -130,19 +146,34 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
       end
     end
 
-    # Install /var/cfengine files if necessary
-    if config.tarfile_url
-      install_tarfile(config.tarfile_tmpfile)
-      File.unlink(config.tarfile_tmpfile)
-    elsif config.tarfile_path
-      install_tarfile(config.tarfile_path)
-    elsif config.files_path
-      install_files(config.files_path)
-    end
-    if config.bootstrap
-      if !verify_bootstrap || config.bootstrap == :force
-        env[:vm].ui.info("Re-bootstrapping because config.bootstrap is set to 'force'") if config.bootstrap == :force
+    if config.mode == :bootstrap
+      # If mode == :bootstrap, we may need to install some files, and then bootstrap the system
+      env[:vm].ui.info("Operating in bootstrap mode.")
+      # Install /var/cfengine files if necessary
+      if config.tarfile_url
+        install_tarfile(config.tarfile_tmpfile)
+        File.unlink(config.tarfile_tmpfile)
+      elsif config.tarfile_path
+        install_tarfile(config.tarfile_path)
+      elsif config.files_path
+        install_files(config.files_path)
+      end
+      if !verify_bootstrap || config.force_bootstrap
+        env[:vm].ui.info("Re-bootstrapping because config.force_bootstrap is set to 'true'") if config.force_bootstrap
         bootstrap_cfengine
+      else
+        env[:vm].ui.info("CFEngine has already been bootstrapped, no need to do it again")
+      end
+    elsif config.mode == :singlerun
+      # In :singlerun mode, we just run the requested policy file
+      env[:vm].ui.info("Operating in singlerun mode.")
+      env[:vm].ui.info("Running requested runfile: #{config.runfile_path}")
+      status = env[:vm].channel.sudo("/var/cfengine/bin/cf-agent -KI -f /vagrant/'#{config.runfile_path}'", :error_check => false)  do |type, data|
+        output_from_cmd(type, data)
+      end
+      if status != 0
+        env[:vm].ui.error("cf-agent returned non-zero exit code: #{status}")
+        raise CFEngineError, :runfile_error
       end
     end
   end
