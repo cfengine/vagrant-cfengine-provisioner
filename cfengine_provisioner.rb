@@ -125,11 +125,11 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
   end
 
   def provision!
-    # Determine the type of distro if possible
-    @__distro = get_vm_packager
-
     # First install CFEngine, if requested and necessary
     if !verify_cfengine_installation || config.install_cfengine == :force
+      # Configure for the package mechanism to use
+      set_packager_variables
+
       if config.install_cfengine
         add_cfengine_repo
         install_cfengine_package
@@ -215,6 +215,21 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     end
   end
 
+  def set_packager_variables
+    # Determine the type of distro if possible
+    @__distro = get_vm_packager
+    if @__distro == :apt
+      @__pkg_install_cmd = "apt-get install"
+      @__pkg_update_cmd = "apt-get update"
+    elsif @__distro == :yum
+      @__pkg_install_cmd = "yum -y install"
+      @__pkg_update_cmd = nil
+    else
+      env[:vm].ui.error("I don't know how to install packages in this distribution.")
+      raise CFEngineError, :unsupported_cfengine_package_distro
+    end
+  end
+
   def add_cfengine_repo
     if @__distro == :apt
       add_deb_repo
@@ -228,14 +243,8 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
 
   def install_cfengine_package
     env[:vm].ui.info("Installing the CFEngine binary package.")
-    if @__distro == :apt
-      env[:vm].channel.sudo("apt-get update && apt-get install cfengine-community");
-    elsif @__distro == :yum
-      env[:vm].channel.sudo("yum -y install cfengine-community")
-    else
-      env[:vm].ui.error("Don't know how to install the CFEngine package in this distribution")
-      raise CFEngineError, :unsupported_cfengine_package_distro
-    end
+    env[:vm].channel.sudo("{@__pkg_update_cmd}")
+    env[:vm].channel.sudo("{@__pkg_install_cmd} cfengine-community")
   end
 
   # tarfile is assumed to be a relative path within the current directory
