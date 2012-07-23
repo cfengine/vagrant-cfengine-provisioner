@@ -243,8 +243,8 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
 
   def install_cfengine_package
     env[:vm].ui.info("Installing the CFEngine binary package.")
-    env[:vm].channel.sudo("{@__pkg_update_cmd}")
-    env[:vm].channel.sudo("{@__pkg_install_cmd} cfengine-community")
+    env[:vm].channel.sudo("#{@__pkg_update_cmd}")
+    env[:vm].channel.sudo("#{@__pkg_install_cmd} cfengine-community")
   end
 
   # tarfile is assumed to be a relative path within the current directory
