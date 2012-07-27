@@ -335,7 +335,7 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
         # will be able to bootstrap against it (adjust fw policy).
         # It might not happen on it's own before the first client comes
         # up. This will only help if the hub is the first provisioned node.
-        env[:vm].ui.info("Because I am a hub, running cf-agent manually for the first time.")
+        env[:vm].ui.info("Because I am a hub, running cf-agent manually for the first time to finish initialization.")
         cmd = "/var/cfengine/bin/cf-agent -KI -f /var/cfengine/masterfiles/failsafe.cf #{classes_args} && /var/cfengine/bin/cf-agent -KI #{classes_args} #{config.agent_options}"
         env[:vm].ui.info("Command: #{cmd}")
         env[:vm].channel.sudo(cmd) do |type,data|
