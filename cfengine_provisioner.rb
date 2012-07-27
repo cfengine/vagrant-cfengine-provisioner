@@ -158,6 +158,7 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
       elsif config.files_path
         install_files(config.files_path)
       end
+      fix_critical_permissions
       if !verify_bootstrap || config.force_bootstrap
         env[:vm].ui.info("Re-bootstrapping because config.force_bootstrap is set to 'true'") if config.force_bootstrap
         bootstrap_cfengine
@@ -267,6 +268,15 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     end
     env[:vm].ui.info("Copying files from /vagrant/#{dirpath} to /var/cfengine on VM")
     env[:vm].channel.sudo("cp -a '/vagrant/#{dirpath}/'* /var/cfengine")
+  end
+
+  def fix_critical_permissions
+    # We hardcode fixing the permissions on /var/cfengine/ppkeys/, if it exists,
+    # because otherwise CFEngine will fail to bootstrap.
+    if env[:vm].channel.test("test -d /var/cfengine/ppkeys", :sudo => true)
+      env[:vm].ui.info("Setting permissions to 600 on /var/cfengine/ppkeys on VM")
+      env[:vm].channel.sudo("chmod -R 600 /var/cfengine/ppkeys")
+    end
   end
 
   def bootstrap_cfengine
