@@ -41,7 +41,7 @@ Vagrant::Config.run do |config|
       # cf3.force_bootstrap = false
 
       # List of classes to pass to cf-agent when executing it on the VM
-      # cf3.classes = [ "val1", "val2" ]
+      # cf3.classes = [ "class1", "class2" ]
 
       # Additional arguments to pass to cf-agent, if needed.
       # cf3.agent_options = "-b test"
@@ -86,11 +86,13 @@ Vagrant::Config.run do |config|
       # on the VM.
       # cf3.files_path = 'cf_files'
 
-      # File to execute when mode == :singlerun
+      # CFEngine policy file to execute.
       # Must be a relative path inside the current directory.
+      # If mode == :singlerun, this file will be executed immediately
+      # after installing CFEngine.
       # If mode == :bootstrap, this will be executed after the
       # host is bootstrapped.
-      # cf3.runfile_path = 'test-list.cf'
+      # cf3.runfile_path = 'test.cf'
 
       # Normally this shouldn't be modified, except for testing or
       # for internal repositories
