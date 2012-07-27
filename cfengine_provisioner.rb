@@ -25,6 +25,7 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
       'files_path' => nil,
       'runfile_path' => nil,
       'classes' => nil,
+      'agent_options' => "",
       # Internal parameters, normally should not be modified
       'debian_repo_file' => '/etc/apt/sources.list.d/cfengine-community.list',
       'debian_repo_line' => 'deb http://cfengine.com/pub/apt $(lsb_release -cs) main',
@@ -45,12 +46,8 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
       errors.add("Invalid mode parameter, must be one of #{CFEngineValidModes.inspect}") unless CFEngineValidModes.include?(mode)
       if mode == :singlerun
         errors.add("When mode == :singlerun, you must specify the runfile_path parameter") if !runfile_path
-        errors.add("Parameters files_path, tarfile_path and tarfile_url are invalid when mode == :singlerun") if files_path || tarfile_path || tarfile_url
-        errors.add("Invalid runfile_path parameter, must be an existing file") unless !runfile_path || File.exists?(runfile_path)
-        errors.add("runfile_path must be a relative path inside the current directory") unless !runfile_path || (Pathname.new(runfile_path).relative? && runfile_path !~ /\.\.\//)
       end
       if mode == :bootstrap
-        errors.add("When mode == :bootstrap, you cannot specify the runfile_path parameter") if runfile_path
         errors.add("Invalid files_path parameter, must be an existing directory") unless !files_path || File.directory?(files_path)
         errors.add("Invalid tarfile_path parameter, must be an existing file") unless !tarfile_path || File.exists?(tarfile_path)
         errors.add("Only one of tarfile_url, tarfile_path or files_path must be specified") if (tarfile_url && files_path) || (tarfile_url && tarfile_path) || (tarfile_path && files_path)
@@ -150,18 +147,19 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
       end
     end
 
+    # Install /var/cfengine files if necessary
+    if config.tarfile_url
+      install_tarfile(config.tarfile_tmpfile)
+      File.unlink(config.tarfile_tmpfile)
+    elsif config.tarfile_path
+      install_tarfile(config.tarfile_path)
+    elsif config.files_path
+      install_files(config.files_path)
+    end
+
     if config.mode == :bootstrap
       # If mode == :bootstrap, we may need to install some files, and then bootstrap the system
       env[:vm].ui.info("Operating in bootstrap mode.")
-      # Install /var/cfengine files if necessary
-      if config.tarfile_url
-        install_tarfile(config.tarfile_tmpfile)
-        File.unlink(config.tarfile_tmpfile)
-      elsif config.tarfile_path
-        install_tarfile(config.tarfile_path)
-      elsif config.files_path
-        install_files(config.files_path)
-      end
       fix_critical_permissions
       if !verify_bootstrap || config.force_bootstrap
         env[:vm].ui.info("Re-bootstrapping because config.force_bootstrap is set to 'true'") if config.force_bootstrap
@@ -169,11 +167,22 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
       else
         env[:vm].ui.info("CFEngine has already been bootstrapped, no need to do it again")
       end
-    elsif config.mode == :singlerun
-      # In :singlerun mode, we just run the requested policy file
-      env[:vm].ui.info("Operating in singlerun mode.")
+    end
+    
+    # In :singlerun mode, we just run the requested policy file
+    env[:vm].ui.info("Operating in singlerun mode.") if config.mode == :singlerun
+
+    # runfile_path is also valid in :bootstrap mode
+    if config.runfile_path
       env[:vm].ui.info("Running requested file: #{config.runfile_path}")
-      cmd = "/var/cfengine/bin/cf-agent -KI -f /vagrant/'#{config.runfile_path}' #{classes_args}"
+      # If runfile_path is a relative path, we assume it's inside the /vagrant directory
+      # We enclose the path in quotes in case there are spaces in there
+      if Pathname.new(config.runfile_path).relative?
+        runfile = "'/vagrant/#{config.runfile_path}'"
+      else
+        runfile = "'#{config.runfile_path}'"
+      end
+      cmd = "/var/cfengine/bin/cf-agent -KI -f #{runfile} #{classes_args} #{config.agent_options}"
       env[:vm].ui.info("Command: #{cmd}")
       status = env[:vm].channel.sudo(cmd, :error_check => false)  do |type, data|
         output_from_cmd(type, data)
@@ -327,7 +336,7 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
         # It might not happen on it's own before the first client comes
         # up. This will only help if the hub is the first provisioned node.
         env[:vm].ui.info("Because I am a hub, running cf-agent manually for the first time.")
-        cmd = "/var/cfengine/bin/cf-agent -KI -f /var/cfengine/masterfiles/failsafe.cf #{classes_args} && /var/cfengine/bin/cf-agent -KI #{classes_args}"
+        cmd = "/var/cfengine/bin/cf-agent -KI -f /var/cfengine/masterfiles/failsafe.cf #{classes_args} && /var/cfengine/bin/cf-agent -KI #{classes_args} #{config.agent_options}"
         env[:vm].ui.info("Command: #{cmd}")
         env[:vm].channel.sudo(cmd) do |type,data|
           output_from_cmd(type, data)
