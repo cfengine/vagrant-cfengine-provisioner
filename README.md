@@ -1,6 +1,4 @@
-# vagrant-cfengine-provisioner
-
-CFEngine provisioner for Vagrant.
+# CFEngine provisioner for Vagrant
 
 This provisioner provides Vagrant the ability to use CFEngine
 to configure a virtual machine.
