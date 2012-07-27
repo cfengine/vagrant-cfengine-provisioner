@@ -1,0 +1,262 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# This is a sample Vagrantfile to install and configure
+# CFEngine 3 Enterprise on the VMs.
+
+require 'cfengine_provisioner.rb'
+
+# Set how many clients to create
+number_of_clients = 4
+
+Vagrant::Config.run do |config|
+  # All Vagrant configuration is done here. The most common configuration
+  # options are documented and commented below. For a complete reference,
+  # please see the online documentation at vagrantup.com.
+
+  # Every Vagrant virtual environment requires a box to build off of.
+  # You can find boxes here: https://github.com/mitchellh/vagrant/wiki/Available-Vagrant-Boxes
+  # or here: http://www.vagrantbox.es/
+  # To download and install a new box: vagrant box add <box_id> <box_url>
+  #    - This only needs to be done once.
+  # For example:
+  #    vagrant box add precise64 http://files.vagrantup.com/precise64.box
+  # Then just indicate here the box_id for the one you want to use
+
+  # By defining this here at the top level, we use the same base box for all the VMs.
+  # You could also define this value inside each VM definition by setting
+  # hub_config.vm.box or client_config.vm.box below, but you'd need to modify
+  # install_enterprise.sh to install the correct packages in each case.
+
+  # config.vm.box = "lucid32"
+  config.vm.box = "precise64"
+  config.vm.box_url = "http://files.vagrantup.com/precise64.box"
+  
+  # First create the hub
+  config.vm.define :cfhub do |hub_config|
+    # Configure the VM hostname
+    hub_config.vm.host_name = "cfhub"
+
+    # For debugging
+    # hub_config.vm.boot_mode = :gui
+
+    # Assign a static IP address in a host-only network
+    hub_config.vm.network :hostonly, "10.1.1.10"
+
+    # Forward port 8080 on the host to 80 on the VM To login to the
+    # CFEngien Mission Portal you can use http://localhost:8080/ or
+    # http://10.1.1.10/, since the host-only IP address defined above
+    # is reachable from the host machine.
+    hub_config.vm.forward_port 80, 8080
+
+    # Install the Nova packages
+    #############
+    # Remember to modify install_interprise.sh to use the packages that
+    # correspond to the distro you are using (i.e. the value of
+    # hub_config.vm.box above)
+    #############
+    hub_config.vm.provision :shell do |shell|
+      shell.path = "install_enterprise.sh"
+      shell.args = "hub"
+    end
+
+    # Run the CFEngine provisioner
+    hub_config.vm.provision CFEngineProvisioner do |cf3|
+      # In case you want a different base box than the one defined above
+      # hub_config.vm.box = "lucid32"
+      # hub_config.vm.box = "precise64"
+
+      # Mode of operation for the provisioner.
+      # If mode == :bootstrap (default), then CFEngine will be
+      # bootstrapped in this machine if it's not bootstrapped already.
+      # (if in addition force_bootstrap is "true", then it will be
+      # always bootstrapped).
+      # If mode == : singlerun, then cf-agent will be run only
+      # once after the VM boots, and it will be used to execute
+      # the CFEngine policy file named in runfile_path.
+      cf3.mode = :bootstrap
+
+      # Whether to force bootstrap even if CFEngine has already been
+      # bootstrapped.
+      # cf3.force_bootstrap = false
+
+      # List of classes to pass to cf-agent when executing it on the VM
+      # cf3.classes = [ "class1", "class2" ]
+
+      # Additional arguments to pass to cf-agent, if needed.
+      # cf3.agent_options = "-b test"
+
+      # Attempt to install CFEngine if not installed yet. Depends on the
+      # binary package repositories from http://cfengine.com/pub/
+      # Any "true" value will cause CFEngine to be installed if it's not
+      # present already. If this parameter is set to :force,
+      # then CFEngine will be reinstalled even if it's already there.
+      cf3.install_cfengine = false
+
+      # Should this machine be configured as a policy hub?
+      cf3.am_policy_hub = true
+
+      # Address of the policy server to use for bootstrapping. Should
+      # be the local IP address for policy servers.
+      # If not specified, the provisioner will automatically use the
+      # IP address of the first non-localhost network interface.
+      # Unfortunately in Vagrant VMs this is normally a NAT interface
+      # that has no communication to the outside world, so we need
+      # to set it manually to the address in a host-only network
+      # which needs to be configured using the config.vm.network
+      # parameter, as shown below.
+      cf3.policy_server = "10.1.1.10"
+    
+      # URL of a .tar.gz file that gets unpacked under /var/cfengine/
+      # after installation but before bootstrap. This file should
+      # contain the contents of /var/cfengine exactly as desired,
+      # so it should contain the appropriate directories, for example
+      # masterfiles/foo.cf, inputs/bar.cf, ppkeys/, etc.
+      # cf3.tarfile_url = 'http://localhost/cfengine_files.tar.gz'
+
+      # Filename of a .tar.gz file that gets unpacked under /var/cfengine/
+      # The effect is the same as with cfengine_tarfile_url, but this
+      # is expected to be a path relative to the current directory (where
+      # the Vagrantfile is stored).
+      # cf3.tarfile_path = 'cfengine_files.tar.gz'
+
+      # Directory to copy to /var/cfengine. Must be relative to current
+      # directory. E.g. if its value is 'cfengine_files', the contents
+      # of /vagrant/cfengine_files/ will be copied to /var/cfengine
+      # on the VM.
+      cf3.files_path = 'cf_files_hub'
+
+      # CFEngine policy file to execute.
+      # Must be a relative path inside the current directory.
+      # If mode == :singlerun, this file will be executed immediately
+      # after installing CFEngine.
+      # If mode == :bootstrap, this will be executed after the
+      # host is bootstrapped.
+      # cf3.runfile_path = 'test.cf'
+
+      # Normally this shouldn't be modified, except for testing or
+      # for internal repositories
+      # cf3.debian_repo_line = 'deb http://cfengine.com/pub/apt $(lsb_release -cs) main'
+
+      # Normally this shouldn't be modified, except for testing or
+      # for internal repositories
+      # cf3.yum_repo_url = 'http://cfengine.com/pub/yum/'
+    end
+  end
+
+  # Now we create the clients.
+
+  for client_number in 1..number_of_clients
+    # Client info based on its number
+    client_id = "cfclient#{client_number}".to_sym
+    # IP addresses starting at 10.1.1.100
+    client_ip_address = "10.1.1.#{(99+client_number).to_s}"
+
+    eval %Q(
+      config.vm.define :#{client_id} do |client_config|
+        # In case you want a different box than the one defined at the top level
+        #    client_config.vm.box = "lucid32"
+        #    client_config.vm.box = "precise64"
+  
+        client_config.vm.host_name = "#{client_id}"
+  
+        # For debugging
+        # client_config.vm.boot_mode = :gui
+  
+        # Assign static IP address, as computed above
+        client_config.vm.network :hostonly, "#{client_ip_address}"
+        # Uncommenting this will cause vagrant to print the client IP
+        # addresses every time it runs.
+        #  puts "Client #{client_id} IP address: #{client_ip_address}"
+  
+        # Install the Nova packages
+        client_config.vm.provision :shell do |shell|
+          shell.path = "install_enterprise.sh"
+          shell.args = "client"
+        end
+  
+        # Use the CFEngine provisioner
+        client_config.vm.provision CFEngineProvisioner do |cf3|
+  
+          # Mode of operation for the provisioner.
+          # If mode == :bootstrap (default), then CFEngine will be
+          # bootstrapped in this machine if it's not bootstrapped already.
+          # (if in addition force_bootstrap is "true", then it will be
+          # always bootstrapped).
+          # If mode == : singlerun, then cf-agent will be run only
+          # once after the VM boots, and it will be used to execute
+          # the CFEngine policy file named in runfile_path.
+          cf3.mode = :bootstrap
+  
+          # Whether to force bootstrap even if CFEngine has already been
+          # bootstrapped.
+          # cf3.force_bootstrap = false
+  
+          # List of classes to pass to cf-agent when executing it on the VM
+          # cf3.classes = [ "class1", "class2" ]
+
+          # Additional arguments to pass to cf-agent, if needed.
+          # cf3.agent_options = "-b test"
+
+          # Attempt to install CFEngine if not installed yet. Depends on the
+          # binary package repositories from http://cfengine.com/pub/
+          # Any "true" value will cause CFEngine to be installed if it's not
+          # present already. If this parameter is set to :force,
+          # then CFEngine will be reinstalled even if it's already there.
+          cf3.install_cfengine = false
+  
+          # Should this machine be configured as a policy hub?
+          cf3.am_policy_hub = false
+  
+          # Address of the policy server to use for bootstrapping. Should
+          # be the local IP address for policy servers.
+          # If not specified, the provisioner will automatically use the
+          # IP address of the first non-localhost network interface.
+          # Unfortunately in Vagrant VMs this is normally a NAT interface
+          # that has no communication to the outside world, so we need
+          # to set it manually to the address in a host-only network
+          # which needs to be configured using the config.vm.network
+          # parameter, as shown below.
+          cf3.policy_server = "10.1.1.10"
+          
+          # URL of a .tar.gz file that gets unpacked under /var/cfengine/
+          # after installation but before bootstrap. This file should
+          # contain the contents of /var/cfengine exactly as desired,
+          # so it should contain the appropriate directories, for example
+          # masterfiles/foo.cf, inputs/bar.cf, ppkeys/, etc.
+          # cf3.tarfile_url = 'http://localhost/cfengine_files.tar.gz'
+  
+          # Filename of a .tar.gz file that gets unpacked under /var/cfengine/
+          # The effect is the same as with cfengine_tarfile_url, but this
+          # is expected to be a path relative to the current directory (where
+          # the Vagrantfile is stored).
+          # cf3.tarfile_path = 'cfengine_files.tar.gz'
+  
+          # Directory to copy to /var/cfengine. Must be relative to current
+          # directory. E.g. if its value is 'cfengine_files', the contents
+          # of /vagrant/cfengine_files/ will be copied to /var/cfengine
+          # on the VM.
+          #cf3.files_path = 'cf_files_client'
+  
+          # CFEngine policy file to execute.
+          # Must be a relative path inside the current directory.
+          # If mode == :singlerun, this file will be executed immediately
+          # after installing CFEngine.
+          # If mode == :bootstrap, this will be executed after the
+          # host is bootstrapped.
+          # cf3.runfile_path = 'test.cf'
+
+          # Normally this shouldn't be modified, except for testing or
+          # for internal repositories
+          # cf3.debian_repo_line = 'deb http://cfengine.com/pub/apt $(lsb_release -cs) main'
+  
+          # Normally this shouldn't be modified, except for testing or
+          # for internal repositories
+          # cf3.yum_repo_url = 'http://cfengine.com/pub/yum/'
+        end
+  
+      end
+    )
+  end
+
+end
