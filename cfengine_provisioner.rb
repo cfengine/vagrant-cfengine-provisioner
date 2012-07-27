@@ -24,6 +24,7 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
       'tarfile_path' => nil,
       'files_path' => nil,
       'runfile_path' => nil,
+      'classes' => nil,
       # Internal parameters, normally should not be modified
       'debian_repo_file' => '/etc/apt/sources.list.d/cfengine-community.list',
       'debian_repo_line' => 'deb http://cfengine.com/pub/apt $(lsb_release -cs) main',
@@ -56,6 +57,9 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
         errors.add("tarfile_tmpfile must be a relative path inside the current directory") unless !tarfile_tmpfile || (Pathname.new(tarfile_tmpfile).relative? && tarfile_tmpfile !~ /\.\.\//)
         errors.add("tarfile_path must be a relative path inside the current directory") unless !tarfile_path || (Pathname.new(tarfile_path).relative? && tarfile_path !~ /\.\.\//)
         errors.add("files_path must be a relative path inside the current directory") unless !files_path || (Pathname.new(files_path).relative? && files_path !~ /\.\.\//)
+      end
+      if classes
+        errors.add("Invalid classes parameter, must be a list of strings.") unless classes.is_a?(Array)
       end
 
       # URL validation happens in prepare.
@@ -168,8 +172,10 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     elsif config.mode == :singlerun
       # In :singlerun mode, we just run the requested policy file
       env[:vm].ui.info("Operating in singlerun mode.")
-      env[:vm].ui.info("Running requested runfile: #{config.runfile_path}")
-      status = env[:vm].channel.sudo("/var/cfengine/bin/cf-agent -KI -f /vagrant/'#{config.runfile_path}'", :error_check => false)  do |type, data|
+      env[:vm].ui.info("Running requested file: #{config.runfile_path}")
+      cmd = "/var/cfengine/bin/cf-agent -KI -f /vagrant/'#{config.runfile_path}' #{classes_args}"
+      env[:vm].ui.info("Command: #{cmd}")
+      status = env[:vm].channel.sudo(cmd, :error_check => false)  do |type, data|
         output_from_cmd(type, data)
       end
       if status != 0
@@ -279,6 +285,16 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
     end
   end
 
+  def classes_args
+    # Return a string appropriate for passing as arguments to cf-agent, containing
+    # the classes to define, if any
+    if config.classes
+      return config.classes.map { |c| "-D#{c}" }.join(" ")
+    else
+      return ""
+    end
+  end
+
   def bootstrap_cfengine
     if config.am_policy_hub
       # For the policy server, config.policy_server is optional
@@ -311,7 +327,9 @@ class CFEngineProvisioner < Vagrant::Provisioners::Base
         # It might not happen on it's own before the first client comes
         # up. This will only help if the hub is the first provisioned node.
         env[:vm].ui.info("Because I am a hub, running cf-agent manually for the first time.")
-        env[:vm].channel.sudo("/var/cfengine/bin/cf-agent -KI -f /var/cfengine/masterfiles/failsafe.cf && /var/cfengine/bin/cf-agent -KI") do |type,data|
+        cmd = "/var/cfengine/bin/cf-agent -KI -f /var/cfengine/masterfiles/failsafe.cf #{classes_args} && /var/cfengine/bin/cf-agent -KI #{classes_args}"
+        env[:vm].ui.info("Command: #{cmd}")
+        env[:vm].channel.sudo(cmd) do |type,data|
           output_from_cmd(type, data)
         end
       end
