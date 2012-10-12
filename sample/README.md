@@ -1,27 +1,4 @@
-# CFEngine provisioner for Vagrant
-
-This provisioner provides Vagrant the ability to use CFEngine
-to configure a virtual machine.
-
-This provisioner will also install CFEngine if needed (only
-supported on RedHat, CentOS, Debian and Ubuntu for now), so
-you can use it on a plain base box, like the ones found at
-<https://github.com/mitchellh/vagrant/wiki/Available-Vagrant-Boxes>.
-
-## Installation
-
-To use it, put `cfengine_provisioner.rb` in the "lib" directory of
-your vagrant installation (the same one where vagrant.rb is located)
-or somewhere else in your Ruby library path. You can also put it in
-the same directory as your Vagrantfile, and change the `require` at
-the top to be like this (note the dot-slash at the beginning):
-
-    require './cfengine_provisioner.rb'
-
-This is only temporarily, we'll soon package it as a proper Vagrant
-plugin.
-
-## Usage
+## Vagrantfile examples for use with CFEngine
 
 For now, all the documentation about the parameters is in the provided
 Vagrantfile samples. You can find them in the samples/ directory.

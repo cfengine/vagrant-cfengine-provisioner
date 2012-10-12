@@ -26,6 +26,9 @@ Vagrant::Config.run do |config|
     # Use the CFEngine provisioner
     hub_config.vm.provision CFEngineProvisioner do |cf3|
 
+      # We use all the default behavior, which is to install CFEngine
+      # and bootstrap it as a policy hub.
+
       # Mode of operation for the provisioner.
       # If mode == :bootstrap (default), then CFEngine will be
       # bootstrapped in this machine if it's not bootstrapped already.
