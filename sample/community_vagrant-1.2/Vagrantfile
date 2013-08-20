@@ -1,0 +1,32 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  # Every Vagrant virtual environment requires a box to build off of.
+  config.vm.box = "precise64"
+
+  # The url from where the 'config.vm.box' box will be fetched if it
+  # doesn't already exist on the user's system.
+  config.vm.box_url = "http://files.vagrantup.com/precise64.box"
+
+
+  # Install and bootstrap CFEngine on the host
+  config.vm.provision :cfengine do |cf|
+    cf.am_policy_hub = true
+  end
+
+  # Install the Design Center repository under /var/cfengine/design-center/
+  config.vm.provision :shell, :inline => "echo 'Updating package lists'; apt-get -qq update; echo 'Installing necessary packages'; apt-get -y -qq install git curl libterm-readline-gnu-perl"
+  config.vm.provision :shell, :inline => "if [[ -x /var/cfengine/design-center ]]; then echo 'Updating Design Center repository'; cd /var/cfengine/design-center; git pull ; else echo 'Cloning Design Center repository'; git clone https://github.com/cfengine/design-center /var/cfengine/design-center; fi"
+
+  config.vm.provision :shell, :inline => <<SCRIPT
+echo ""
+echo "Your test CFEngine VM is ready!"
+echo ""
+echo "Use 'vagrant ssh' to login, then 'sudo su' to switch to root."
+echo "To enter the cf-sketch tool, run:"
+echo "    cd /var/cfengine/design-center/tools/cf-sketch"
+echo "    ./cf-sketch.pl"
+SCRIPT
+
+end
