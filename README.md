@@ -1,5 +1,7 @@
 # CFEngine provisioner for Vagrant
 
+## Please do not use this provisioner. Use Vagrant 1.2 or later, which includes already a newer version of the provisioner. This is kept here for historical purposes.
+
 This provisioner provides Vagrant the ability to use CFEngine
 to configure a virtual machine.
 
